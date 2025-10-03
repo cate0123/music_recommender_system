@@ -8,6 +8,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.utils import load_processed
+
 from src.CF import ItemSimilarityRecommender
 from src.deep_model import train_and_save
 import joblib
