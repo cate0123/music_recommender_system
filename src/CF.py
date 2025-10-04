@@ -1,10 +1,9 @@
-
 # src/collaborative_filtering.py
 import os
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
+from sklearn.metrics.pairwise import cosine_similarity
 from src.utils import load_processed
 
 class ItemSimilarityRecommender:
@@ -15,25 +14,34 @@ class ItemSimilarityRecommender:
 
     def _build_meta(self):
         # create a combined metadata text column
-        self.items = self.train[['id','name','genre','artists','album']].copy()
-        self.items['meta'] = (self.items['genre'].astype(str) + ' ' +
-                              self.items['artists'].astype(str) + ' ' +
-                              self.items['album'].astype(str) + ' ' +
-                              self.items['name'].astype(str))
+        self.items = self.train[['id', 'name', 'genre', 'artists', 'album']].copy()
+        self.items['meta'] = (
+            self.items['genre'].astype(str) + ' ' +
+            self.items['artists'].astype(str) + ' ' +
+            self.items['album'].astype(str) + ' ' +
+            self.items['name'].astype(str)
+        )
         self.id_to_index = {id_: idx for idx, id_ in enumerate(self.items['id'].tolist())}
 
     def _build_tfidf(self):
-        self.tfidf = TfidfVectorizer(min_df=1, ngram_range=(1,2))
+        self.tfidf = TfidfVectorizer(min_df=1, ngram_range=(1, 2))
         self.tfidf_matrix = self.tfidf.fit_transform(self.items['meta'])
-        self.sim_matrix = linear_kernel(self.tfidf_matrix, self.tfidf_matrix)
+
+        # Use sparse cosine similarity to avoid memory errors
+        self.sim_matrix = cosine_similarity(self.tfidf_matrix, dense_output=False)
 
     def recommend(self, track_id, k=10):
         if track_id not in self.id_to_index:
             # fallback to popularity
             return self.train.sort_values('popularity', ascending=False)['id'].head(k).tolist()
+
         idx = self.id_to_index[track_id]
-        sims = self.sim_matrix[idx]
-        top_idx = np.argsort(sims)[::-1][1:k+1]  # exclude self
+
+        # get similarities for this track (as numpy array)
+        sims = self.sim_matrix[idx].toarray().ravel()
+
+        # sort and get top-k (excluding self)
+        top_idx = np.argsort(sims)[::-1][1:k+1]
         return self.items.iloc[top_idx]['id'].tolist()
 
 if __name__ == "__main__":
@@ -42,4 +50,3 @@ if __name__ == "__main__":
     seed = train['id'].iloc[0]
     print("Seed:", seed)
     print("Similar:", rec.recommend(seed, k=10))
-
